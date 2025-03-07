@@ -51,9 +51,9 @@ Router_Agent = Agent(
     role = 'Router',
     goal = 'Route user question to a vectorstore or web search',
     backstory = (
-        "You are a smart routing agent. Your job is to analyze the user question "
-        "and determine if the answer can be found in the provided internal documents (vectorstore), "
-        "or if a web search is necessary to get the latest or broader information. "
+        "You are a smart routing agent. Your job is to analyze the user question"
+        "and determine if the answer can be found in the provided internal documents (vectorstore),"
+        "or if a web search is necessary to get the latest or broader information."
         "You are familiar with the internal documents, especially related to Git functions and commands."),
     verbose = True,
     allow_delegation = False,
@@ -66,8 +66,8 @@ Vector_Search_Agent = Agent(
     role = "Vector Search Expert",
     goal = "Retrieve relevant information from the internal vectorstore to answer the question",
     backstory = (
-        "You are an expert in retrieving information from the internal document collection (vectorstore). "
-        "Whenever the Router Agent determines that the answer is within the internal documents, you "
+        "You are an expert in retrieving information from the internal document collection (vectorstore)."
+        "Whenever the Router Agent determines that the answer is within the internal documents, you"
         "will extract the best matching content and summarize it into a clear and concise response."),
     verbose = True,
     allow_delegation = False,
@@ -81,11 +81,11 @@ Web_Search_Agent = Agent(
     role = "Web Researcher",
     goal = "Retrieve the most relevant and up-to-date information from the web to answer: {question}",
     backstory = (
-    "You are a highly skilled web researcher, trained to rapidly explore the digital world "
-    "and uncover the most relevant, accurate, and up-to-date information. "
-    "Your expertise lies in efficiently filtering through vast amounts of data, distinguishing "
-    "credible sources from noise, and delivering valuable insights that directly contribute "
-    "to answering complex questions. Your role is critical in supporting knowledge retrieval "
+    "You are a highly skilled web researcher, trained to rapidly explore the digital world"
+    "and uncover the most relevant, accurate, and up-to-date information."
+    "Your expertise lies in efficiently filtering through vast amounts of data, distinguishing"
+    "credible sources from noise, and delivering valuable insights that directly contribute"
+    "to answering complex questions. Your role is critical in supporting knowledge retrieval"
     "for advanced AI systems, ensuring responses are grounded in the latest available information."),
     llm = llm,
     max_iterations = 3,
@@ -98,9 +98,9 @@ Web_Search_Agent = Agent(
 # Define Tasks - Router, Vector Search & Web Search!
 router_task = Task(
     description = (
-        "Analyze the user question: {question}. "
-        "If the question is related to 'Git functions' or content present in the provided document, "
-        "then return 'vectorstore'. Otherwise, return 'websearch'. "
+        "Analyze the user question: {question}."
+        "If the question is related to 'Git functions' or content present in the provided document,"
+        "then return 'vectorstore'. Otherwise, return 'websearch'."
         "Respond with only 'vectorstore' or 'websearch' — no explanations."),
     expected_output = "A single word: either 'vectorstore' or 'websearch'. No other explanation.",
     agent = Router_Agent
@@ -108,7 +108,7 @@ router_task = Task(
 
 vector_retrieval_task = Task(
     description = (
-        "If the router's decision was 'vectorstore', use the vectorstore_search_tool "
+        "If the router's decision was 'vectorstore', use the vectorstore_search_tool"
         "to retrieve and summarize the most relevant information to answer: {question}."),
     expected_output = "A clear and concise answer retrieved from the internal vectorstore.",
     agent = Vector_Search_Agent,
@@ -117,7 +117,7 @@ vector_retrieval_task = Task(
 
 web_retrieval_task = Task(
     description = (
-        "If the router's decision was 'websearch', use the web_search_tool "
+        "If the router's decision was 'websearch', use the web_search_tool"
         "to retrieve and summarize the most relevant and up-to-date information to answer: {question}."),
     expected_output = "A clear and concise answer retrieved from web sources.",
     agent = Web_Search_Agent,
