@@ -45,6 +45,23 @@ def web_search_tool(query: str) -> str:
     search = TavilySearchResults(api_key=tavily_api_key, k=3)
     return search.run(query)
 
+@tool("answer_generator_tool")
+def answer_generator_tool(question: str, retrieved_content: str) -> str:
+    """
+    Generate a comprehensive answer based on the retrieved content.
+    Returns a well-formatted, concise answer to the user's question.
+    """
+    prompt = f"""
+    Based on the following retrieved content, generate a comprehensive answer to the question.
+    
+    Question: {question}
+    
+    Retrieved Content:
+    {retrieved_content}
+    
+    Answer:
+    """
+    return llm.invoke(prompt).content
 
 # Define Agents - Router, Vector Search & Web Search!
 Router_Agent = Agent(
@@ -56,9 +73,9 @@ Router_Agent = Agent(
         "or if a web search is necessary to get the latest or broader information."
         "You are familiar with the internal documents, especially related to Git functions and commands."),
     verbose = True,
-    allow_delegation = False,
+    allow_delegation = True,
     llm = llm,
-    max_iterations = 3,
+    max_iterations = 1,
     memory = True
 )
 
@@ -70,10 +87,10 @@ Vector_Search_Agent = Agent(
         "Whenever the Router Agent determines that the answer is within the internal documents, you"
         "will extract the best matching content and summarize it into a clear and concise response."),
     verbose = True,
-    allow_delegation = False,
+    allow_delegation = True,
     llm = llm,
-    max_iterations = 3,
-    tools = [vectorstore_search_tool],
+    max_iterations = 2,
+    tools = [vectorstore_search_tool, answer_generator_tool],
     memory = True
 )
 
@@ -88,10 +105,26 @@ Web_Search_Agent = Agent(
     "to answering complex questions. Your role is critical in supporting knowledge retrieval"
     "for advanced AI systems, ensuring responses are grounded in the latest available information."),
     llm = llm,
-    max_iterations = 3,
-    allow_delegation=True,
-    verbose=True,
-    tools = [web_search_tool],
+    max_iterations = 2,
+    allow_delegation = True,
+    verbose = True,
+    tools = [web_search_tool, answer_generator_tool],
+    memory = True
+)
+
+Answer_Agent = Agent(
+    role = "Answer Synthesizer",
+    goal = "Provide comprehensive and accurate answers to user queries",
+    backstory = (
+        "You are an expert in synthesizing information from various sources into clear, "
+        "concise, and accurate answers. Your strength lies in understanding the nuances of "
+        "user questions and crafting responses that directly address their needs. You can "
+        "integrate information from both internal documents and web searches to provide "
+        "the most complete and helpful answers possible."),
+    llm = llm,
+    max_iterations = 1,
+    allow_delegation = False,
+    verbose = True,
     memory = True
 )
 
@@ -124,13 +157,27 @@ web_retrieval_task = Task(
     context = [router_task]
 )
 
+final_answer_task = Task(
+    description = (
+        "Review the information provided by the specialist agents and create a final, comprehensive "
+        "answer to '{question}'. Your task is to:\n"
+        "1. Synthesize the information from either the Vector Search Expert or Web Researcher.\n"
+        "2. Ensure the answer is accurate, complete, and directly addresses the user's question.\n"
+        "3. Format the answer in a clear and structured way.\n"
+        "4. Add any additional context or explanations that would be helpful."),
+    expected_output = "The final, comprehensive answer to the user's question",
+    agent = Answer_Agent,
+    context = [vector_retrieval_task, web_retrieval_task]
+)
+
+
 rag_crew = Crew(
-    agents = [Router_Agent, Vector_Search_Agent, Web_Search_Agent],
-    tasks = [router_task, vector_retrieval_task, web_retrieval_task],
+    agents = [Router_Agent, Vector_Search_Agent, Web_Search_Agent, Answer_Agent],
+    tasks = [router_task, vector_retrieval_task, web_retrieval_task, final_answer_task],
     process = Process.sequential,
     verbose = True
 )
 
-inputs = {"question":"what is the git command for commit?"}
+inputs = {"question":"Who is the current president of USA?"}
 result = rag_crew.kickoff(inputs=inputs)
 print("✅ Final Answer:\n", result)
