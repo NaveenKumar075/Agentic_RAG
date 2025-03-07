@@ -4,8 +4,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_groq import ChatGroq
 from langchain_community.tools import TavilySearchResults
-from crewai_tools  import tool
-from crewai import Crew, Task, Agent
+from crewai.tools import tool
+from crewai import Crew, Task, Agent, Process
 from dotenv import load_dotenv
 import os
 
@@ -13,7 +13,7 @@ load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
 tavily_api_key = os.getenv("TAVILY_API_KEY")
 
-llm = ChatGroq(groq_api_key=groq_api_key, model_name="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(groq_api_key=groq_api_key, model_name="groq/llama-3.3-70b-versatile", temperature=0)
 
 file_path = "git-cheat-sheet-education.pdf"
 loader = PyPDFLoader(file_path)
@@ -25,14 +25,23 @@ embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 vector_store = FAISS.from_documents(chunks, embeddings)
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
+
 # Actual RAG logic should come here!
-@tool("vectorstore_search_tool", return_direct=True)
-def vectorstore_search_tool(query):
+@tool("vectorstore_search_tool")
+def vectorstore_search_tool(query: str) -> str:
+    """
+    Search the internal document vectorstore for relevant content matching the query.
+    Returns a string containing the concatenated content of the top matching documents.
+    """
     docs = retriever.get_relevant_documents(query)
     return "\n".join([doc.page_content for doc in docs])
 
-@tool("web_search_tool", return_direct=True)
-def web_search_tool(query):
+@tool("web_search_tool")
+def web_search_tool(query: str) -> str:
+    """
+    Perform a web search using Tavily to retrieve up-to-date information matching the query.
+    Returns a string containing summarized search results.
+    """
     search = TavilySearchResults(api_key=tavily_api_key, k=3)
     return search.run(query)
 
@@ -49,19 +58,23 @@ Router_Agent = Agent(
     verbose = True,
     allow_delegation = False,
     llm = llm,
+    max_iterations = 3,
+    memory = True
 )
 
 Vector_Search_Agent = Agent(
     role = "Vector Search Expert",
     goal = "Retrieve relevant information from the internal vectorstore to answer the question",
-    backstor = (
+    backstory = (
         "You are an expert in retrieving information from the internal document collection (vectorstore). "
         "Whenever the Router Agent determines that the answer is within the internal documents, you "
         "will extract the best matching content and summarize it into a clear and concise response."),
     verbose = True,
     allow_delegation = False,
     llm = llm,
-    tools=[vectorstore_search_tool]
+    max_iterations = 3,
+    tools = [vectorstore_search_tool],
+    memory = True
 )
 
 Web_Search_Agent = Agent(
@@ -75,12 +88,14 @@ Web_Search_Agent = Agent(
     "to answering complex questions. Your role is critical in supporting knowledge retrieval "
     "for advanced AI systems, ensuring responses are grounded in the latest available information."),
     llm = llm,
-    max_iter = 3,
+    max_iterations = 3,
     allow_delegation=True,
     verbose=True,
-    tools = [web_search_tool]
+    tools = [web_search_tool],
+    memory = True
 )
 
+# Define Tasks - Router, Vector Search & Web Search!
 router_task = Task(
     description = (
         "Analyze the user question: {question}. "
@@ -112,9 +127,10 @@ web_retrieval_task = Task(
 rag_crew = Crew(
     agents = [Router_Agent, Vector_Search_Agent, Web_Search_Agent],
     tasks = [router_task, vector_retrieval_task, web_retrieval_task],
+    process = Process.sequential,
     verbose = True
 )
 
-inputs = {"question":"What are the main git functions?"}
+inputs = {"question":"what is the git command for commit?"}
 result = rag_crew.kickoff(inputs=inputs)
 print("✅ Final Answer:\n", result)
