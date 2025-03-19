@@ -23,7 +23,7 @@ chunks = text_splitter.split_documents(documents)
 
 embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 vector_store = FAISS.from_documents(chunks, embeddings)
-retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 2})
 
 
 # Actual RAG logic should come here!
@@ -42,7 +42,7 @@ def web_search_tool(query: str) -> str:
     Perform a web search using Tavily to retrieve up-to-date information matching the query.
     Returns a string containing summarized search results.
     """
-    search = TavilySearchResults(api_key=tavily_api_key, k=3)
+    search = TavilySearchResults(api_key=tavily_api_key, k=1)
     return search.run(query)
 
 @tool("answer_generator_tool")
@@ -51,6 +51,12 @@ def answer_generator_tool(question: str, retrieved_content: str) -> str:
     Generate a comprehensive answer based on the retrieved content.
     Returns a well-formatted, concise answer to the user's question.
     """
+    MAX_CONTEXT_SIZE = 1500  # Adjust based on model limits
+    
+    if len(retrieved_content) > MAX_CONTEXT_SIZE:
+        summary_prompt = f"Summarize this content to be under {MAX_CONTEXT_SIZE} characters:\n\n{retrieved_content}\n\nSummary:"
+        retrieved_content = llm.invoke(summary_prompt).content
+    
     prompt = f"""
     Based on the following retrieved content, generate a comprehensive answer to the question.
     
@@ -73,10 +79,10 @@ Router_Agent = Agent(
         "or if a web search is necessary to get the latest or broader information."
         "You are familiar with the internal documents, especially related to Git functions and commands."),
     verbose = True,
-    allow_delegation = True,
+    allow_delegation = False,
     llm = llm,
     max_iterations = 1,
-    memory = True
+    memory = False
 )
 
 Vector_Search_Agent = Agent(
@@ -87,11 +93,11 @@ Vector_Search_Agent = Agent(
         "Whenever the Router Agent determines that the answer is within the internal documents, you"
         "will extract the best matching content and summarize it into a clear and concise response."),
     verbose = True,
-    allow_delegation = True,
+    allow_delegation = False,
     llm = llm,
-    max_iterations = 2,
+    max_iterations = 1,
     tools = [vectorstore_search_tool, answer_generator_tool],
-    memory = True
+    memory = False
 )
 
 Web_Search_Agent = Agent(
@@ -105,11 +111,11 @@ Web_Search_Agent = Agent(
     "to answering complex questions. Your role is critical in supporting knowledge retrieval"
     "for advanced AI systems, ensuring responses are grounded in the latest available information."),
     llm = llm,
-    max_iterations = 2,
-    allow_delegation = True,
     verbose = True,
+    allow_delegation = False,
+    max_iterations = 1,
     tools = [web_search_tool, answer_generator_tool],
-    memory = True
+    memory = False
 )
 
 Answer_Agent = Agent(
@@ -122,9 +128,9 @@ Answer_Agent = Agent(
         "integrate information from both internal documents and web searches to provide "
         "the most complete and helpful answers possible."),
     llm = llm,
-    max_iterations = 1,
-    allow_delegation = False,
     verbose = True,
+    allow_delegation = False,
+    max_iterations = 1,
     memory = True
 )
 
@@ -132,8 +138,8 @@ Answer_Agent = Agent(
 router_task = Task(
     description = (
         "Analyze the user question: {question}."
-        "If the question is related to 'Git functions' or content present in the provided document,"
-        "then return 'vectorstore'. Otherwise, return 'websearch'."
+        "If the question is related to 'Git functions' or content present in the provided document, "
+        "then return 'vectorstore'. Otherwise, return 'websearch'. "
         "Respond with only 'vectorstore' or 'websearch' — no explanations."),
     expected_output = "A single word: either 'vectorstore' or 'websearch'. No other explanation.",
     agent = Router_Agent
@@ -178,6 +184,6 @@ rag_crew = Crew(
     verbose = True
 )
 
-inputs = {"question":"Who is the current president of USA?"}
+inputs = {"question":"How to remove a file using git?"}
 result = rag_crew.kickoff(inputs=inputs)
 print("✅ Final Answer:\n", result)
